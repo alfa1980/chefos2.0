@@ -6,9 +6,7 @@ import { DEMO } from "../lib/demo";
 export default function StageFornitori({ data, setData }) {
   const [raw, setRaw] = useState(data.raw || "");
   const [loadingP, setLP] = useState(false);
-  const [loadingQ, setLQ] = useState(false);
   const [errP, setErrP] = useState("");
-  const [errQ, setErrQ] = useState("");
 
   const analizzaPrezzi = async () => {
     setLP(true); setErrP("");
@@ -19,17 +17,6 @@ export default function StageFornitori({ data, setData }) {
     setLP(false);
   };
 
-  const verificaQualita = async () => {
-    setLQ(true); setErrQ("");
-    try {
-      const fornitori = (raw.match(/===\s*(.+?)\s*===/g) || []).map(s => s.replace(/===/g, "").trim()).join(", ");
-      const marchi = [...new Set((raw.match(/\(([^)]+)\)/g) || []).map(s => s.replace(/[()]/g, "").split("–")[0].trim()))].slice(0, 8).join(", ");
-      const { result, searched } = await analyze("qualita", { fornitori, marchi });
-      setData(d => ({ ...d, qualita: result, qualitaSearched: searched }));
-    } catch (e) { setErrQ(e.message); }
-    setLQ(false);
-  };
-
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -38,7 +25,7 @@ export default function StageFornitori({ data, setData }) {
           {data.savedAt && <Badge color="var(--success)">💾 Salvato {data.savedAt}</Badge>}
         </div>
       </div>
-      <Desc>Carica uno o più listini. Il sistema confronta i prezzi e verifica la qualità dei fornitori online.</Desc>
+      <Desc>Carica uno o più listini. Il sistema confronta i prezzi tra fornitori e indica il migliore per categoria.</Desc>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <FilePick label="Carica listino TXT" onLoad={t => setRaw(p => p ? p + "\n\n" + t : t)} />
@@ -52,23 +39,13 @@ export default function StageFornitori({ data, setData }) {
         <Btn onClick={analizzaPrezzi} disabled={!raw.trim() || loadingP}>
           {loadingP ? "⏳ Analisi prezzi…" : "🔍 Confronta Prezzi"}
         </Btn>
-        <Btn variant="ghost" onClick={verificaQualita} disabled={!raw.trim() || loadingQ}>
-          {loadingQ ? "⏳ Ricerca online…" : "🌐 Verifica Qualità Online"}
-        </Btn>
         {data.prezziAnalisi && <Badge color="var(--success)">✓ Prezzi</Badge>}
-        {data.qualita && <Badge color="var(--info)">{data.qualitaSearched ? "🌐 Qualità verificata" : "✓ Qualità"}</Badge>}
       </div>
 
       {(loadingP || data.prezziAnalisi || errP) && (
         <div style={{ marginTop: 18 }}>
           <Lbl>Confronto prezzi per prodotto</Lbl>
           <Out text={data.prezziAnalisi} loading={loadingP} error={errP} />
-        </div>
-      )}
-      {(loadingQ || data.qualita || errQ) && (
-        <div style={{ marginTop: 14 }}>
-          <Lbl>Report qualità fornitori {data.qualitaSearched ? "(fonti web)" : ""}</Lbl>
-          <Out text={data.qualita} loading={loadingQ} error={errQ} />
         </div>
       )}
     </div>
