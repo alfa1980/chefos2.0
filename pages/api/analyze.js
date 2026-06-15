@@ -17,13 +17,10 @@ const SYSTEMS = {
   ordini: "Sei un responsabile acquisti senior per ristorazione collettiva. Calcola con precisione, mostra i conti. Rispondi in italiano.",
   magazzino: "Sei un responsabile magazzino per ristorazione professionale. Segnala ogni anomalia. Rispondi in italiano.",
   report: "Sei un controller finanziario specializzato in ristorazione collettiva. Report chiari con numeri e azioni concrete. Italiano.",
-  qualita: "Sei un esperto di qualità per la ristorazione professionale italiana. Valuta fornitori e marchi alimentari basandoti su reputazione, certificazioni e idoneità per uso in mensa. Rispondi in italiano con giudizi pratici.",
 };
 
 const PROMPTS = {
   fornitori: (d) => `Analizza questi listini fornitori. Per ogni prodotto crea una tabella comparativa con colonne PRODOTTO | ${Object.keys(d.fornitori || {}).join(" | ")} | MIGLIOR PREZZO. Poi raccomanda quale fornitore preferire per ogni categoria.\n\n${trunc(d.raw, 2500)}`,
-
-  qualita: (d) => `Valuta la qualità e affidabilità di questi fornitori e marchi alimentari per ristorazione collettiva italiana.\n\nFornitori: ${d.fornitori}\nMarchi: ${d.marchi}\n\nPer ognuno: reputazione nel settore, certificazioni (DOP/IGP/BIO/ISO), punti di forza e debolezza, idoneità per mensa collettiva. Sii concreto e pratico.`,
 
   menu: (d) => `Analizza questo menu e ricettario. Per ogni piatto mostra: PIATTO | INGREDIENTE | g/PORZIONE. Poi crea la lista unica di tutti gli ingredienti necessari nell'intera settimana.\n\n---MENU---\n${trunc(d.menu, 1200)}\n\n---RICETTARIO---\n${trunc(d.ricettario, 1200)}`,
 
@@ -44,22 +41,17 @@ export default async function handler(req, res) {
   if (!PROMPTS[action]) return res.status(400).json({ error: `Azione non riconosciuta: ${action}` });
 
   try {
-    const useSearch = action === "qualita";
     const params = {
       model: "claude-sonnet-4-6",
-      max_tokens: 2048,
+      max_tokens: 1200,
       system: SYSTEMS[action] || SYSTEMS.fornitori,
       messages: [{ role: "user", content: PROMPTS[action](data) }],
     };
-    if (useSearch) {
-      params.tools = [{ type: "web_search_20250305", name: "web_search" }];
-    }
 
     const response = await client.messages.create(params);
     const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
-    const searched = response.content.some((b) => b.type === "tool_use");
 
-    return res.status(200).json({ result: text, searched });
+    return res.status(200).json({ result: text });
   } catch (err) {
     console.error("Claude API error:", err);
     return res.status(500).json({ error: err.message || "Errore API" });
