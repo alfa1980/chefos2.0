@@ -1,115 +1,225 @@
 import { useState } from "react";
-import Head from "next/head";
-import { Card } from "../components/ui";
-import StageFornitori from "../components/StageFornitori";
-import { StageMenu, StagePresenze, StageOrdini, StageMagazzino, StageReport } from "../components/stages";
+import { Btn, Badge, Lbl, H2, Desc, TA, Out, FilePick, ExportBtn } from "./ui";
+import { analyze } from "../lib/api";
+import { DEMO } from "../lib/demo";
 
-const STAGES = [
-  { id: "fornitori", short: "Fornitori" },
-  { id: "menu",      short: "Menu" },
-  { id: "presenze",  short: "Presenze" },
-  { id: "ordini",    short: "Ordini" },
-  { id: "magazzino", short: "Magazzino" },
-  { id: "report",    short: "Report" },
-];
+// ── MENU ─────────────────────────────────────────────────────────────────────
+export function StageMenu({ data, setData }) {
+  const [menu, setMenu] = useState(data.menu || "");
+  const [ric, setRic] = useState(data.ricettario || "");
+  const [loading, setL] = useState(false);
+  const [err, setErr] = useState("");
 
-export default function Home() {
-  const [active, setActive] = useState("fornitori");
-  const [fornitori, setFornitori] = useState({});
-  const [menu,      setMenu]      = useState({});
-  const [presenze,  setPresenze]  = useState({});
-  const [ordini,    setOrdini]    = useState({});
-  const [magazzino, setMagazzino] = useState({});
-  const [report,    setReport]    = useState({});
-
-  const prog = {
-    fornitori: !!fornitori.prezziAnalisi,
-    menu:      !!menu.parsed,
-    presenze:  !!presenze.parsed,
-    ordini:    !!ordini.parsed,
-    magazzino: !!magazzino.parsed,
-    report:    !!report.generated,
+  const analizza = async () => {
+    setL(true); setErr("");
+    try {
+      const { result } = await analyze("menu", { menu, ricettario: ric });
+      setData({ menu, ricettario: ric, parsed: result });
+    } catch (e) { setErr(e.message); }
+    setL(false);
   };
-  const done = Object.values(prog).filter(Boolean).length;
-  const total = STAGES.length;
-
-  const stageMap = {
-    fornitori: <StageFornitori data={fornitori} setData={setFornitori} />,
-    menu:      <StageMenu data={menu} setData={setMenu} />,
-    presenze:  <StagePresenze data={presenze} setData={setPresenze} />,
-    ordini:    <StageOrdini fornitori={fornitori} menu={menu} presenze={presenze} data={ordini} setData={setOrdini} />,
-    magazzino: <StageMagazzino data={magazzino} setData={setMagazzino} />,
-    report:    <StageReport ordini={ordini} magazzino={magazzino} presenze={presenze} data={report} setData={setReport} />,
-  };
-
-  const idx = STAGES.findIndex(s => s.id === active);
 
   return (
-    <>
-      <Head>
-        <title>Chef OS – Gestionale Cucina</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-
-      {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--border)", padding: "13px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div>
+      <H2>🍽 Menu & Ricettario</H2>
+      <Desc>Inserisci il menu settimanale e il ricettario con grammature per porzione.</Desc>
+      <Btn variant="ghost" onClick={() => { setMenu(DEMO.menu); setRic(DEMO.ricettario); }} style={{ fontSize: 12, marginBottom: 12 }}>🎯 Carica Demo</Btn>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: 3, color: "var(--accent)" }}>CHEF OS</span>
-            <span style={{ fontSize: 17, fontWeight: 700 }}>Gestionale Cucina</span>
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
-            fornitori → menu → presenze → ordini → magazzino → report
-          </div>
+          <Lbl>Menu settimanale</Lbl>
+          <FilePick label="Carica menu" onLoad={t => setMenu(t)} />
+          <div style={{ marginTop: 8 }}><TA value={menu} onChange={setMenu} placeholder={"LUN: Primo | Secondo | Contorno\nMAR: ..."} rows={9} /></div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-soft)" }}>{done}/{total} fasi</span>
-          <div style={{ width: 90, height: 5, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--accent)", transition: "width .4s", borderRadius: 3 }} />
-          </div>
+        <div>
+          <Lbl>Ricettario (g/porzione)</Lbl>
+          <FilePick label="Carica ricettario" onLoad={t => setRic(t)} />
+          <div style={{ marginTop: 8 }}><TA value={ric} onChange={setRic} placeholder={"Piatto (1 porzione): ingrediente Xg, ..."} rows={9} /></div>
         </div>
       </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
+        <Btn onClick={analizza} disabled={!menu.trim() || loading}>{loading ? "⏳ Elaborazione…" : "🍽 Elabora Menu & Ricettario"}</Btn>
+        {data.parsed && <Badge color="var(--success)">✓ Ricette indicizzate</Badge>}
+      </div>
+      {(loading || data.parsed || err) && <div style={{ marginTop: 18 }}><Lbl>Distinta ingredienti</Lbl><Out text={data.parsed} loading={loading} error={err} /></div>}
+    </div>
+  );
+}
 
-      {/* Pipeline nav */}
-      <div style={{ borderBottom: "1px solid var(--border)", padding: "10px 24px", background: "var(--surface)", overflowX: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", minWidth: "max-content" }}>
-          {STAGES.map((s, i) => {
-            const isA = active === s.id;
-            const isDone = prog[s.id];
-            return (
-              <div key={s.id} style={{ display: "flex", alignItems: "center" }}>
-                <button onClick={() => setActive(s.id)}
-                  style={{ background: isA ? "var(--accent)" : isDone ? "var(--success)22" : "var(--surface)", color: isA ? "#000" : isDone ? "var(--success)" : "var(--text-soft)", border: `1px solid ${isA ? "var(--accent)" : isDone ? "var(--success)66" : "var(--border)"}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontWeight: isA ? 700 : 500, fontSize: 13, whiteSpace: "nowrap", transition: "all .15s" }}>
-                  {isDone && !isA ? "✓ " : ""}{s.short}
-                </button>
-                {i < STAGES.length - 1 && <div style={{ width: 16, height: 2, background: isDone ? "var(--success)66" : "var(--border)", flexShrink: 0 }} />}
-              </div>
-            );
-          })}
+// ── PRESENZE ─────────────────────────────────────────────────────────────────
+export function StagePresenze({ data, setData }) {
+  const [raw, setRaw] = useState(data.raw || "");
+  const [loading, setL] = useState(false);
+  const [err, setErr] = useState("");
+
+  const analizza = async () => {
+    setL(true); setErr("");
+    try {
+      const { result } = await analyze("presenze", { raw });
+      setData({ raw, parsed: result });
+    } catch (e) { setErr(e.message); }
+    setL(false);
+  };
+
+  return (
+    <div>
+      <H2>👥 Presenze Previste</H2>
+      <Desc>Inserisci i coperti attesi per ogni giorno della settimana.</Desc>
+      <Btn variant="ghost" onClick={() => setRaw(DEMO.presenze)} style={{ fontSize: 12, marginBottom: 12 }}>🎯 Carica Demo</Btn>
+      <FilePick label="Carica report presenze" onLoad={t => setRaw(t)} />
+      <div style={{ marginTop: 10 }}><TA value={raw} onChange={setRaw} placeholder={"Lunedì 20/01: 185 coperti\n..."} rows={6} /></div>
+      <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
+        <Btn onClick={analizza} disabled={!raw.trim() || loading}>{loading ? "⏳ Calcolo…" : "👥 Elabora Presenze"}</Btn>
+        {data.parsed && <Badge color="var(--success)">✓ Presenze caricate</Badge>}
+      </div>
+      {(loading || data.parsed || err) && <div style={{ marginTop: 18 }}><Lbl>Analisi presenze</Lbl><Out text={data.parsed} loading={loading} error={err} /></div>}
+    </div>
+  );
+}
+
+// ── ORDINI ────────────────────────────────────────────────────────────────────
+export function StageOrdini({ fornitori, menu, presenze, data, setData }) {
+  const [loading, setL] = useState(false);
+  const [err, setErr] = useState("");
+  const [lt, setLt] = useState("24");
+  const ready = fornitori.prezziAnalisi && menu.parsed && presenze.parsed;
+
+  const genera = async () => {
+    setL(true); setErr("");
+    try {
+      const { result } = await analyze("ordini", {
+        fornitoriRaw: fornitori.raw,
+        prezziAnalisi: fornitori.prezziAnalisi,
+        menuParsed: menu.parsed,
+        presenzeParsed: presenze.parsed,
+        leadTime: lt,
+      });
+      setData({ parsed: result, at: new Date().toLocaleTimeString("it-IT") });
+    } catch (e) { setErr(e.message); }
+    setL(false);
+  };
+
+  return (
+    <div>
+      <H2>🛒 Bozza Ordini Automatica</H2>
+      <Desc>Incrocio automatico menu × presenze × fornitori. Ordini divisi per fornitore con date pianificate.</Desc>
+      {!ready && (
+        <div style={{ background: "var(--accent-dim)33", border: "1px solid var(--accent-dim)", borderRadius: 8, padding: 14, marginBottom: 18, fontSize: 13, color: "var(--accent-light)" }}>
+          ⚠️ Completa prima:{!fornitori.prezziAnalisi ? " Fornitori" : ""}{!menu.parsed ? " Menu" : ""}{!presenze.parsed ? " Presenze" : ""}
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 16, marginBottom: 18 }}>
+        <div>
+          <Lbl>Lead time consegna (ore)</Lbl>
+          <input type="number" value={lt} onChange={e => setLt(e.target.value)} min="12" max="72"
+            style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", padding: "8px 12px", fontFamily: "var(--mono)", fontSize: 14, width: 80 }} />
+        </div>
+        <Badge color={ready ? "var(--success)" : "var(--muted)"}>{ready ? "✓ Dati pronti" : "Dati incompleti"}</Badge>
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <Btn onClick={genera} disabled={!ready || loading}>{loading ? "⏳ Generazione ordini…" : "🛒 Genera Bozza Ordini"}</Btn>
+        {data.at && <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>gen. {data.at}</span>}
+      </div>
+      {(loading || data.parsed || err) && (
+        <div style={{ marginTop: 18 }}>
+          <Lbl>Ordini per fornitore</Lbl>
+          <Out text={data.parsed} loading={loading} error={err} />
+          <ExportBtn text={data.parsed} filename={`ordini_${new Date().toISOString().split("T")[0]}.txt`} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MAGAZZINO ─────────────────────────────────────────────────────────────────
+export function StageMagazzino({ data, setData }) {
+  const [ddt, setDdt] = useState(data.ddt || "");
+  const [scarichi, setScarichi] = useState(data.scarichi || "");
+  const [loading, setL] = useState(false);
+  const [err, setErr] = useState("");
+
+  const analizza = async () => {
+    setL(true); setErr("");
+    try {
+      const { result } = await analyze("magazzino", { ddt, scarichi });
+      setData({ ddt, scarichi, parsed: result });
+    } catch (e) { setErr(e.message); }
+    setL(false);
+  };
+
+  return (
+    <div>
+      <H2>🏪 Magazzino & DDT</H2>
+      <Desc>Carica DDT ricevuti e scarichi. Il sistema verifica conformità, aggiorna le giacenze e genera la bozza inventario.</Desc>
+      <Btn variant="ghost" onClick={() => { setDdt(DEMO.ddt); setScarichi(DEMO.scarichi); }} style={{ fontSize: 12, marginBottom: 12 }}>🎯 Carica Demo</Btn>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <Lbl>DDT ricevuti</Lbl>
+          <FilePick label="Carica DDT" onLoad={t => setDdt(t)} />
+          <div style={{ marginTop: 8 }}><TA value={ddt} onChange={setDdt} placeholder={"DDT #001 - Fornitore - data\nProdotto Xkg ✓\nProdotto Ykg ⚠ (mancano Z)"} rows={8} /></div>
+        </div>
+        <div>
+          <Lbl>Scarichi magazzino</Lbl>
+          <FilePick label="Carica scarichi" onLoad={t => setScarichi(t)} />
+          <div style={{ marginTop: 8 }}><TA value={scarichi} onChange={setScarichi} placeholder={"Lunedì (185 coperti): pasta 22kg, pollo 33kg…"} rows={8} /></div>
         </div>
       </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
+        <Btn onClick={analizza} disabled={(!ddt.trim() && !scarichi.trim()) || loading}>
+          {loading ? "⏳ Verifica…" : "🏪 Verifica DDT & Aggiorna Giacenze"}
+        </Btn>
+        {data.parsed && <Badge color="var(--success)">✓ Magazzino aggiornato</Badge>}
+      </div>
+      {(loading || data.parsed || err) && <div style={{ marginTop: 18 }}><Lbl>Giacenze, anomalie & bozza inventario</Lbl><Out text={data.parsed} loading={loading} error={err} /></div>}
+    </div>
+  );
+}
 
-      {/* Content */}
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "26px 18px" }}>
-        <Card>{stageMap[active]}</Card>
+// ── REPORT ────────────────────────────────────────────────────────────────────
+export function StageReport({ ordini, magazzino, presenze, data, setData }) {
+  const [loading, setL] = useState(false);
+  const [err, setErr] = useState("");
+  const [periodo, setPeriodo] = useState("settimanale");
+  const report = data?.report || "";
+  const hasData = ordini.parsed || magazzino.parsed;
 
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }}>
-          <button onClick={() => setActive(STAGES[idx - 1].id)} disabled={idx === 0}
-            style={{ background: "var(--surface2)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 18px", cursor: idx === 0 ? "not-allowed" : "pointer", opacity: idx === 0 ? 0.5 : 1, fontSize: 13, fontWeight: 600 }}>
-            ← Precedente
+  const genera = async () => {
+    setL(true); setErr(""); 
+    try {
+      const { result } = await analyze("report", {
+        periodo,
+        ordini: ordini.parsed || "",
+        magazzino: magazzino.parsed || "",
+        presenze: presenze.parsed || "",
+      });
+      setData({ report: result, generated: true, periodo, at: new Date().toLocaleTimeString("it-IT") });
+    } catch (e) { setErr(e.message); }
+    setL(false);
+  };
+
+  return (
+    <div>
+      <H2>📊 Report Costi & KPI</H2>
+      <Desc>Food cost, sprechi, scostamenti e KPI operativi. Seleziona il periodo e genera.</Desc>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        {["giornaliero", "settimanale", "mensile"].map(p => (
+          <button key={p} onClick={() => setPeriodo(p)}
+            style={{ background: periodo === p ? "var(--accent)" : "var(--surface2)", color: periodo === p ? "#000" : "var(--text-soft)", border: `1px solid ${periodo === p ? "var(--accent)" : "var(--border)"}`, borderRadius: 6, padding: "7px 14px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 13, fontWeight: periodo === p ? 700 : 400 }}>
+            {p.charAt(0).toUpperCase() + p.slice(1)}
           </button>
-          <button onClick={() => setActive(STAGES[idx + 1].id)} disabled={idx === STAGES.length - 1}
-            style={{ background: idx === STAGES.length - 1 ? "var(--accent-dim)" : "var(--accent)", color: "#000", border: "none", borderRadius: 8, padding: "9px 18px", cursor: idx === STAGES.length - 1 ? "not-allowed" : "pointer", opacity: idx === STAGES.length - 1 ? 0.6 : 1, fontSize: 13, fontWeight: 600 }}>
-            Successiva →
-          </button>
+        ))}
+      </div>
+      {!hasData && <div style={{ background: "var(--accent-dim)33", border: "1px solid var(--accent-dim)", borderRadius: 8, padding: 14, marginBottom: 18, fontSize: 13, color: "var(--accent-light)" }}>⚠️ Completa almeno Ordini o Magazzino per un report significativo.</div>}
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <Btn onClick={genera} disabled={loading}>{loading ? "⏳ Elaborazione…" : `📊 Genera Report ${periodo.charAt(0).toUpperCase() + periodo.slice(1)}`}</Btn>
+        {data?.generated && <Badge color="var(--success)">✓ Report generato</Badge>}
+      </div>
+      {(loading || report || err) && (
+        <div style={{ marginTop: 18 }}>
+          <Lbl>Report – {periodo}</Lbl>
+          <Out text={report} loading={loading} error={err} />
+          <ExportBtn text={report} filename={`report_${periodo}_${new Date().toISOString().split("T")[0]}.txt`} />
         </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{ borderTop: "1px solid var(--border)", padding: "10px 24px", fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <span>Alessandro Facci – Chef Responsabile Vendita Diretta</span>
-        <span>Chef OS v2.0 · Powered by Claude AI</span>
-      </div>
-    </>
+      )}
+    </div>
   );
 }
