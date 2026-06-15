@@ -20,6 +20,7 @@ export default function Home() {
   const [presenze,  setPresenze]  = useState({});
   const [ordini,    setOrdini]    = useState({});
   const [magazzino, setMagazzino] = useState({});
+  const [report,    setReport]    = useState({});
 
   const prog = {
     fornitori: !!fornitori.prezziAnalisi,
@@ -27,10 +28,10 @@ export default function Home() {
     presenze:  !!presenze.parsed,
     ordini:    !!ordini.parsed,
     magazzino: !!magazzino.parsed,
-    report:    false,
+    report:    !!report.generated,
   };
   const done = Object.values(prog).filter(Boolean).length;
-  const total = STAGES.length - 1;
+  const total = STAGES.length;
 
   const stageMap = {
     fornitori: <StageFornitori data={fornitori} setData={setFornitori} />,
@@ -38,7 +39,7 @@ export default function Home() {
     presenze:  <StagePresenze data={presenze} setData={setPresenze} />,
     ordini:    <StageOrdini fornitori={fornitori} menu={menu} presenze={presenze} data={ordini} setData={setOrdini} />,
     magazzino: <StageMagazzino data={magazzino} setData={setMagazzino} />,
-    report:    <StageReport ordini={ordini} magazzino={magazzino} presenze={presenze} />,
+    report:    <StageReport ordini={ordini} magazzino={magazzino} presenze={presenze} data={report} setData={setReport} />,
   };
 
   const idx = STAGES.findIndex(s => s.id === active);
