@@ -1,6 +1,8 @@
 import { useState } from "react";
 import Head from "next/head";
-import { Card } from "../components/ui";
+import { Card, Btn } from "../components/ui";
+import { AuthGate, CreditiBadge } from "../components/Auth";
+import { supabase } from "../lib/supabaseClient";
 import StageFornitori from "../components/StageFornitori";
 import { StageMenu, StagePresenze, StageOrdini, StageMagazzino, StageReport } from "../components/stages";
 
@@ -14,6 +16,14 @@ const STAGES = [
 ];
 
 export default function Home() {
+  return (
+    <AuthGate>
+      {({ profile }) => <ChefOSApp profile={profile} />}
+    </AuthGate>
+  );
+}
+
+function ChefOSApp({ profile }) {
   const [active, setActive] = useState("fornitori");
   const [fornitori, setFornitori] = useState({});
   const [menu,      setMenu]      = useState({});
@@ -51,7 +61,6 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      {/* Header */}
       <div style={{ borderBottom: "1px solid var(--border)", padding: "13px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
@@ -62,15 +71,16 @@ export default function Home() {
             fornitori → menu → presenze → ordini → magazzino → report
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <CreditiBadge profile={profile} />
           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text-soft)" }}>{done}/{total} fasi</span>
           <div style={{ width: 90, height: 5, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
             <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--accent)", transition: "width .4s", borderRadius: 3 }} />
           </div>
+          <Btn variant="ghost" onClick={() => supabase.auth.signOut()} style={{ fontSize: 12 }}>Esci</Btn>
         </div>
       </div>
 
-      {/* Pipeline nav */}
       <div style={{ borderBottom: "1px solid var(--border)", padding: "10px 24px", background: "var(--surface)", overflowX: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", minWidth: "max-content" }}>
           {STAGES.map((s, i) => {
@@ -89,7 +99,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Content */}
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "26px 18px" }}>
         <Card>{stageMap[active]}</Card>
 
@@ -105,7 +114,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Footer */}
       <div style={{ borderTop: "1px solid var(--border)", padding: "10px 24px", fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <span>Alessandro Facci – Chef Responsabile Vendita Diretta</span>
         <span>Chef OS v2.0 · Powered by Claude AI</span>
