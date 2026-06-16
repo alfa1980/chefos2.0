@@ -2,8 +2,27 @@
 // All Claude calls go through here — API key stays on the server
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(5, "10 s"),
+});
+
+const globalRatelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(20, "1 s"),
+  prefix: "global",
+});
 
 function trunc(s, max = 2000) {
   if (!s) return "";
@@ -36,8 +55,46 @@ const PROMPTS = {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { action, data } = req.body;
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  if (!token) return res.status(401).json({ error: "Devi accedere per usare questa funzione." });
 
+  const { data: userData, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !userData?.user) {
+    return res.status(401).json({ error: "Sessione non valida. Accedi di nuovo." });
+  }
+  const userId = userData.user.id;
+
+  const [userLimit, globalLimit] = await Promise.all([
+    ratelimit.limit(userId),
+    globalRatelimit.limit("system"),
+  ]);
+
+  if (!userLimit.success) {
+    return res.status(429).json({ error: "Troppe richieste. Attendi qualche secondo e riprova." });
+  }
+  if (!globalLimit.success) {
+    return res.status(503).json({ error: "Sistema momentaneamente occupato per traffico elevato. Riprova in pochi secondi." });
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("crediti_residui, abbonamento_attivo, piano")
+    .eq("id", userId)
+    .single();
+
+  if (profileError || !profile) {
+    return res.status(403).json({ error: "Profilo non trovato. Contatta il supporto." });
+  }
+  if (profile.crediti_residui <= 0) {
+    return res.status(402).json({
+      error: profile.piano === "free"
+        ? "Hai esaurito le richieste gratuite del mese. Passa a un piano superiore per continuare."
+        : "Hai esaurito i crediti del periodo corrente. Attendi il rinnovo o aggiorna il piano.",
+    });
+  }
+
+  const { action, data } = req.body;
   if (!PROMPTS[action]) return res.status(400).json({ error: `Azione non riconosciuta: ${action}` });
 
   try {
@@ -51,9 +108,28 @@ export default async function handler(req, res) {
     const response = await client.messages.create(params);
     const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
 
-    return res.status(200).json({ result: text });
+    await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .update({ crediti_residui: profile.crediti_residui - 1 })
+        .eq("id", userId),
+      supabaseAdmin.from("usage_log").insert({
+        user_id: userId,
+        action,
+        tokens_input: response.usage?.input_tokens || null,
+        tokens_output: response.usage?.output_tokens || null,
+        success: true,
+      }),
+    ]);
+
+    return res.status(200).json({ result: text, crediti_residui: profile.crediti_residui - 1 });
   } catch (err) {
     console.error("Claude API error:", err);
+    await supabaseAdmin.from("usage_log").insert({
+      user_id: userId,
+      action,
+      success: false,
+    });
     return res.status(500).json({ error: err.message || "Errore API" });
   }
 }
