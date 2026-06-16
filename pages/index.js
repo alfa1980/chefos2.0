@@ -121,3 +121,6 @@ function ChefOSApp({ profile }) {
     </>
   );
 }
+export async function getServerSideProps() {
+  return { props: {} };
+}
